@@ -1,0 +1,25 @@
+replicaCount: 1
+
+fullnameOverride: "events"
+
+image: "events:0.2.14"
+
+service:
+  type: NodePort
+  port: 9000
+
+postgresql:
+  enabled: true
+  postgresqlUsername: eventsuser
+  postgresqlPassword: eventspasswd
+  postgresqlDatabase: eventsdb
+  persistence:
+    size: 0.1Gi
+  service:
+    port: "5432"
+
+jaeger:
+  agentHost: "jaeger-agent.proj.svc.cluster.local"
+  reporterLogSpans: "true"
+  samplerType: "const"
+  samplerParam: "1"

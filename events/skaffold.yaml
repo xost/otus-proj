@@ -1,0 +1,17 @@
+apiVersion: skaffold/v2beta2
+kind: Config
+build:
+  tagPolicy:
+    sha256: {}
+  artifacts:
+  - image: events
+    context: .
+deploy:
+  helm:
+    releases:
+    - name: events
+      chartPath: chart
+      skipBuildDependencies: true
+      values:
+        image: events
+

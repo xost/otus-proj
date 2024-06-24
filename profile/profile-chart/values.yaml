@@ -1,0 +1,19 @@
+replicaCount: 1
+
+fullnameOverride: "profile"
+
+image: "profile:0.2.14"
+
+service:
+  type: NodePort
+  port: 9000
+
+postgresql:
+  enabled: true
+  postgresqlUsername: profileuser
+  postgresqlPassword: profilepasswd
+  postgresqlDatabase: profiledb
+  persistence:
+    size: 0.1Gi
+  service:
+    port: "5432"

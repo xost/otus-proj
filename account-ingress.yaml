@@ -1,0 +1,34 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: account
+  annotations:
+    nginx.ingress.kubernetes.io/auth-url: "http://auth.proj.svc.cluster.local:9000/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "http://$host/signin"
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-User,X-Email,X-User-Id,X-First-Name,X-Last-Name"
+spec:
+  rules:
+  - host: arch.homework
+    http:
+      paths:
+      - path: /account/get
+        pathType: Prefix
+        backend:
+          service:
+            name: account
+            port:
+              number: 9000
+      - path: /account/genreq
+        pathType: Prefix
+        backend:
+          service:
+            name: account
+            port:
+              number: 9000
+      - path: /account/deposit
+        pathType: Prefix
+        backend:
+          service:
+            name: account
+            port:
+              number: 9000

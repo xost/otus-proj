@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chart.fullname" . }}
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "chart.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "chart.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image }}"
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          env:
+            - name: DATABASE_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "chart.fullname" . }}-secret
+                  key: DATABASE_URI
+            - name: DBHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "chart.fullname" . }}-configmap
+                  key: DBHOST
+            - name: DBNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "chart.fullname" . }}-configmap
+                  key: DBNAME
+            - name: DBUSER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "chart.fullname" . }}-configmap
+                  key: DBUSER
+            - name: DBPASS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "chart.fullname" . }}-configmap
+                  key: DBPASS
+            - name: JAEGER_SERVICE_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "chart.fullname" . }}-configmap
+                  key: JAEGER_SERVICE_NAME
+            - name: JAEGER_AGENT_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "chart.fullname" . }}-configmap
+                  key: JAEGER_AGENT_HOST
+            - name: JAEGER_REPORTER_LOG_SPANS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "chart.fullname" . }}-configmap
+                  key: JAEGER_REPORTER_LOG_SPANS
+            - name: JAEGER_SAMPLER_TYPE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "chart.fullname" . }}-configmap
+                  key: JAEGER_SAMPLER_TYPE
+            - name: JAEGER_SAMPLER_PARAM
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "chart.fullname" . }}-configmap
+                  key: JAEGER_SAMPLER_PARAM

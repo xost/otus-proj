@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: profile
+  annotations:
+    nginx.ingress.kubernetes.io/auth-url: "http://auth.saga.svc.cluster.local:9000/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "http://$host/signin"
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-User,X-Email,X-User-Id,X-First-Name,X-Last-Name"
+spec:
+  rules:
+  - host: arch.homework
+    http:
+      paths:
+      - path: /profile/me
+        pathType: Prefix
+        backend:
+          service:
+            name: profile
+            port:
+              number: 9000

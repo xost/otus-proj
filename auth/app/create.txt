@@ -1,0 +1,2 @@
+curl -X POST http://localhost/register -d '{"login":"user","password":"password","email":"user@mail.com","first_name":"us","last_name":"er"}'
+curl -X POST http://localhost/login -d '{"login":"user","password":"password"}'
