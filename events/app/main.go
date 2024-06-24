@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
@@ -145,7 +146,15 @@ func main() {
 	}
 	defer db.Close()
 
-	if err = db.PingContext(ctx); err != nil {
+	var i int
+	for i = 0; i < 5; i++ {
+		if err = db.PingContext(ctx); err == nil {
+			break
+		}
+		log.Println("Failed to check db connection:", err)
+		time.Sleep(30 * time.Second)
+	}
+	if i == 5 && err != nil {
 		log.Fatal("Failed to check db connection:", err)
 	}
 

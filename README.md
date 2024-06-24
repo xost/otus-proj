@@ -1,19 +1,37 @@
-# otus-task-9
+# otus-proj
 
 
-операции внесения средств на баланс сервисе идемподентны
-
-приложения деплоятся в пространство saga
+приложения деплоятся в пространство proj
 
 ```
-git clone https://github.com/xost/otus-ask-9.git
+git clone https://github.com/xost/otus-proj.git
 
-cd otus-task-9
+cd otus-proj
+
+kubectl apply -f jaeger/jaeger-all-in-one.yaml
+
+echo '
+  apiVersion: v1
+  kind: ConfigMap
+  data:
+    enable-opentracing: "true"
+    jaeger-collector-host: jaeger-agent.proj.svc.cluster.local
+  metadata:
+    name: ingress-nginx-controller
+    namespace: ingress-nginx
+  ' | kubectl replace -f -
 
 cd auth
 skaffold run
 cd ../account
 skaffold run
+cd ../events
+skaffold run
+cd ../notif
+skaffold run
+cd ../orders
+skaffold run
+
 
 ```
 Авторизуемся:

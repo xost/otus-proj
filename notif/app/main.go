@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
@@ -112,7 +113,15 @@ func main() {
 	}
 	defer db.Close()
 
-	if err = db.PingContext(ctx); err != nil {
+	var i int
+	for i = 0; i < 5; i++ {
+		if err = db.PingContext(ctx); err == nil {
+			break
+		}
+		log.Println("Failed to check db connection:", err)
+		time.Sleep(30 * time.Second)
+	}
+	if i == 5 && err != nil {
 		log.Fatal("Failed to check db connection:", err)
 	}
 
@@ -143,10 +152,11 @@ func mustPrepareStmts(ctx context.Context, db *sql.DB) {
 	}
 }
 
-func createNotif(id int, message string) error {
-	_, err := createNotifStmt.Query(id, message)
+func createNotif(uid int, n *notifModel) error {
+	log.Println("... h43 ... : ", n.OrderID, n.Message)
+	_, err := createNotifStmt.Query(uid, n.OrderID, n.Message)
 	if err != nil {
-		log.Printf("Failed to create notification for user id [%d]: %s", id, err)
+		log.Printf("Failed to create notification for user id [%d]: %s", uid, err)
 		return err
 	}
 	return nil
@@ -166,7 +176,10 @@ func getNotif(uid int) ([]notifModel, error) {
 			log.Printf("Failed to scan row: %s", err)
 			continue
 		}
-		notifs = append(notifs, notifModel{})
+		notifs = append(notifs, notifModel{
+			OrderID: *orderID,
+			Message: *message,
+		})
 	}
 
 	return notifs, nil
@@ -178,7 +191,7 @@ func create(w http.ResponseWriter, r *http.Request) {
 	defer span.Finish()
 
 	headers := r.Header
-	id, err := strconv.Atoi(headers.Get("X-User-Id"))
+	uid, err := strconv.Atoi(headers.Get("X-User-Id"))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "Got wrong header [X-User-Id]: %s", err)
@@ -187,21 +200,21 @@ func create(w http.ResponseWriter, r *http.Request) {
 	n := notifModel{}
 	if err = json.NewDecoder(r.Body).Decode(&n); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		log.Printf("Failed to parse request body user id [%d]: %s\n", id, err)
+		log.Printf("Failed to parse request body user id [%d]: %s\n", uid, err)
 		return
 	}
-	if err = createNotif(id, n.Message); err != nil {
-		log.Printf("Failed to create notification for user id [%d]: %s\n", id, err)
+	if err = createNotif(uid, &n); err != nil {
+		log.Printf("Failed to create notification for user id [%d]: %s\n", uid, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	log.Printf("Successfully created notification for user id [%d]\n", id)
+	log.Printf("Successfully created notification for user id [%d]\n", uid)
 	w.WriteHeader(http.StatusOK)
 }
 
 func get(w http.ResponseWriter, r *http.Request) {
 	spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
-	span := tracer.StartSpan("got request for new notify", ext.RPCServerOption(spanCtx))
+	span := tracer.StartSpan("got request for notify's list", ext.RPCServerOption(spanCtx))
 	defer span.Finish()
 
 	headers := r.Header
