@@ -174,6 +174,7 @@ func main() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/orders/get", reqlog(isAuthenticatedMiddleware(get))).Methods("GET")
+	r.HandleFunc("/orders/get/{id}", reqlog(isAuthenticatedMiddleware(get))).Methods("GET")
 	r.HandleFunc("/orders/create", reqlog(isAuthenticatedMiddleware(create))).Methods("POST")
 	r.HandleFunc("/orders/callback/events", reqlog(isAuthenticatedMiddleware(callbackEvents))).Methods("POST")
 	r.HandleFunc("/orders/callback/account", reqlog(isAuthenticatedMiddleware(callbackPayment))).Methods("POST")
@@ -319,6 +320,28 @@ func get(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Failed to get user id: %s\n", err)
 	}
+
+	vars := mux.Vars(r)
+	if id_, ok := vars["id"]; ok {
+		var oid int
+		if oid, err = strconv.Atoi(id_); err != nil {
+			log.Println("Failed to parse request")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var o *orderModel
+		o, err = getOrder(oid)
+		if err != nil {
+			log.Printf("Could not find any event with id [%d]\n", oid)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		data, _ := json.MarshalIndent(o, "", "\t")
+		w.WriteHeader(http.StatusOK)
+		w.Write(data)
+		return
+	}
+
 	rows, err := getOrdersStmt.Query(uid)
 	if err != nil {
 		log.Printf("Failed to get orders list: %s\n", err)
@@ -344,7 +367,7 @@ func get(w http.ResponseWriter, r *http.Request) {
 			Status:  *status,
 		})
 	}
-	data, _ := json.Marshal(orders)
+	data, _ := json.MarshalIndent(orders, "", "\t")
 	w.WriteHeader(http.StatusOK)
 	w.Write(data)
 }
@@ -355,27 +378,27 @@ func create(w http.ResponseWriter, r *http.Request) {
 	defer span.Finish()
 
 	headers := r.Header
-	userID, err := strconv.Atoi(headers.Get("X-User-Id"))
+	uid, err := strconv.Atoi(headers.Get("X-User-Id"))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "Got wrong header [X-User-Id]: %s", err)
 		return
 	}
-	b := orderModel{}
-	if err = json.NewDecoder(r.Body).Decode(&b); err != nil {
+	o := orderModel{}
+	if err = json.NewDecoder(r.Body).Decode(&o); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Printf("Failed to parse request body user id []: %s\n", err)
 		return
 	}
-	oid, err := order(spanCtx, userID, &b)
+	oid, err := order(spanCtx, uid, &o)
 	if err != nil {
-		log.Printf("Failed to order event [%d] for user [%d]: %s\n", b.EventID, userID, err)
+		log.Printf("Failed to order event [%d] for user [%d]: %s\n", o.EventID, uid, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	log.Printf("Successfully ordered event [%d] for user [%d]\n", b.EventID, userID)
+	log.Printf("Successfully ordered event [%d] for user [%d]\n", o.EventID, uid)
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("The order was successfully create"))
+	fmt.Fprintf(w, `{"success":true, "order_id":%d}`, oid)
 	if err = actionOrderStatus(spanCtx, oid); err != nil {
 		log.Printf("Failed to perform action based on order's status: %s\n", err)
 	}

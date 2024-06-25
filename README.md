@@ -2,92 +2,135 @@
 
 
 приложения деплоятся в пространство proj
-
+Установка:
 ```
+
+minikube config set-context --current --namespace=proj
 git clone https://github.com/xost/otus-proj.git
 
 cd otus-proj
 
+helm repo add jaeger-all-in-one https://raw.githubusercontent.com/hansehe/jaeger-all-in-one/master/helm/charts
+helm install jaeger-all-in-one jaeger-all-in-one/jaeger-all-in-one
+
 kubectl apply -f jaeger/jaeger-all-in-one.yaml
+kubecl replace -f jaeger/configmap.yaml
 
-echo '
-  apiVersion: v1
-  kind: ConfigMap
-  data:
-    enable-opentracing: "true"
-    jaeger-collector-host: jaeger-agent.proj.svc.cluster.local
-  metadata:
-    name: ingress-nginx-controller
-    namespace: ingress-nginx
-  ' | kubectl replace -f -
-
-cd auth
-skaffold run
-cd ../account
-skaffold run
-cd ../events
-skaffold run
-cd ../notif
-skaffold run
-cd ../orders
-skaffold run
-
-
+make install
 ```
 Авторизуемся:
 ```
-curl -v -X POST http://arch.homework/login -d '{"login":"admin","password":"password"}'
+cookie=$(curl -c - -X POST http://arch.homework/login -d '{"login":"admin","password":"password"}')
 ```
-cookie:
+Пополним баланс (операции идемподентны):
 ```
-session_id=d6b74026-7bdf-4e31-8955-75fe1e0d075d
+$curl -v --cookie <(echo "$cookie") -X GET http://arch.homework/account/genreq
+$curl --cookie <(echo "$cookie") --header "X-Request-Id: 9ec992778cea45cc4db54bc479e673d5" -X POST http://arch.homework/account/deposit -d '{"delta":100}
+$curl --cookie <(echo "$cookie") -X GET http://arch.homework/account/get
 ```
-Пополним баланс:
+баланс изменился:
 ```
-curl -v --cookie session_id=d6b74026-7bdf-4e31-8955-75fe1e0d075d -X PUT http://arch.homework/account/deposit -d '{"delta":100}'
-curl -v --cookie session_id=d6b74026-7bdf-4e31-8955-75fe1e0d075d -X GET http://arch.homework/account/get
+{"balance":100}
 ```
-баланс не изменился:
+Cоздадим несколько мероприятий:
 ```
-{"balance":0}
+$curl --cookie <(echo "$cookie") -X POST http://arch.homework/events/create -d '{"event_name":"red run", "total_slots":2, "price":30}'
+{"created_status": true, "event_id": 47, "event_name": red run, "price": 30, "total_slots": 2}
+
+$curl --cookie <(echo "$cookie") -X POST http://arch.homework/events/create -d '{"event_name":"green run", "total_slots":5, "price":50}'
+{"created_status": true, "event_id": 48, "event_name": green run, "price": 50, "total_slots": 5}
 ```
-пополним баланс с предварительным запросом на операцию:
-запрос:
+Зарегистрируемся на мероприятие:
 ```
-curl -v --cookie session_id=d6b74026-7bdf-4e31-8955-75fe1e0d075d -X GET http://arch.homework/account/genreq
+$curl --cookie <(echo "$cookie") -X POST http://arch.homework/orders/create -d '{"event_id":47}'
+{"success":true, "order_id":11}
 ```
-X-Request-Id
+проверим статус регистрации (статус 4 - прошла успешно):
 ```
-X-Request-Id: e13a61186ebc8d9ee8f92422883fc22d
+$curl --cookie <(echo "$cookie") -X GET http://arch.homework/orders/get/11
+{
+	"id": 11,
+	"user_id": 1,
+	"event_id": 47,
+	"price": 30,
+	"status": 4
+}
 ```
-пополним баланс с полученным request-id:
+проверим баланс (уменьшился на стоимость мероприятия):
 ```
-curl -v --header "X-Request-Id: e13a61186ebc8d9ee8f92422883fc22d" --cookie session_id=d6b74026-7bdf-4e31-8955-75fe1e0d075d -X POST http://arch.homework/account/deposit -d '{"delta":50}'
-curl -v --cookie session_id=d6b74026-7bdf-4e31-8955-75fe1e0d075d -X GET http://arch.homework/account/get
+$curl --cookie <(echo "$cookie") -X GET http://arch.homework/account/get
+{"balance":70}
 ```
-баланс:
+должны получить оповещение (отправка на почту не реализована):
 ```
-{"balance":50}
+$curl --cookie <(echo "$cookie") -X GET http://arch.homework/notif/get/11
+{
+	"order_id": 11,
+	"message": "Order was successfully completed"
+}
+
 ```
-повторим операцию пополнения с тем же request-id
+Повторим регистрацию на мероприятие:
 ```
-curl -v --header "X-Request-Id: e13a61186ebc8d9ee8f92422883fc22d" --cookie session_id=d6b74026-7bdf-4e31-8955-75fe1e0d075d -X POST http://arch.homework/account/deposit -d '{"delta":50}'
-curl -v --cookie session_id=d6b74026-7bdf-4e31-8955-75fe1e0d075d -X GET http://arch.homework/account/get
+$curl --cookie <(echo "$cookie") -X POST http://arch.homework/orders/create -d '{"event_id":47}'
+{"success":true, "order_id":12}
 ```
-баланс не изменился:
+проверим статус регистрации (статус 4 - прошла успешно):
 ```
-{"balance":50}
+$curl --cookie <(echo "$cookie") -X GET http://arch.homework/orders/get/12
+{
+	"id": 12,
+	"user_id": 1,
+	"event_id": 47,
+	"price": 30,
+	"status": 4
+}
 ```
-повторим операцию пополнения с произвольным request-id
+проверим баланс (уменьшился на стоимость мероприятия):
 ```
-curl -v --header "X-Request-Id: 000000" --cookie session_id=d6b74026-7bdf-4e31-8955-75fe1e0d075d -X POST http://arch.homework/account/deposit -d '{"delta":50}'
-curl -v --cookie session_id=d6b74026-7bdf-4e31-8955-75fe1e0d075d -X GET http://arch.homework/account/get
+$curl --cookie <(echo "$cookie") -X GET http://arch.homework/account/get
+{"balance":40}
 ```
-баланс не изменился:
+Повторим регистрацию на мероприятие третий раз (максимальное возможное количество на это мероприятие слотов - 2 ):
 ```
-{"balance":50}
+$curl --cookie <(echo "$cookie") -X POST http://arch.homework/orders/create -d '{"event_id":47}'
+{"success":true, "order_id":13}
+```
+проверим статус регистрации (статус -1 - отмена регистрации т.к. не осталось доступных слотов):
+```
+$curl --cookie <(echo "$cookie") -X GET http://arch.homework/orders/get/13
+{
+	"id": 13,
+	"user_id": 1,
+	"event_id": 47,
+	"price": 30,
+	"status": -1
+}
+```
+проверим баланс (не изменился):
+```
+$curl --cookie <(echo "$cookie") -X GET http://arch.homework/account/get
+{"balance":40}
+```
+Попробуем зарегистрироваться на другое мероприятие (стоимость участия - 50):
+```
+$curl --cookie <(echo "$cookie") -X POST http://arch.homework/orders/create -d '{"event_id":48}'
+{"success":true, "order_id":14}
+```
+проверим статус регистрации (статус -1 - отмена регистрации т.к. не хватает денег на балансе):
+```
+$curl --cookie <(echo "$cookie") -X GET http://arch.homework/orders/get/14
+{
+	"id": 14,
+	"user_id": 1,
+	"event_id": 48,
+	"price": 50,
+	"status": -1
+}
 ```
 
-Вывод: операция внесения средств идемподентна.
+Посмотрим на трассировку операций:
 
+![Список операций](/assets/traces.png "список")
+![Трассировка операции регистрации на мероприятие](/assets/order_create_trace.png "трассировка")
 

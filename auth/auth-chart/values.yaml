@@ -18,6 +18,12 @@ postgresql:
   service:
     port: "5432"
 
+jaeger:
+  agentHost: "jaeger-agent.proj.svc.cluster.local"
+  reporterLogSpans: "true"
+  samplerType: "const"
+  samplerParam: "1"
+
 ingress:
   enabled: false
   hosts:

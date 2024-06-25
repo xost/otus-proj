@@ -198,7 +198,6 @@ func updatebalance(uid int, rid string, delta int) error {
 }
 
 func get(w http.ResponseWriter, r *http.Request) {
-
 	spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
 	span := tracer.StartSpan("got request for current balance", ext.RPCServerOption(spanCtx))
 	defer span.Finish()
@@ -206,17 +205,14 @@ func get(w http.ResponseWriter, r *http.Request) {
 	headers := r.Header
 	id, err := strconv.Atoi(headers.Get("X-User-Id"))
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Got wrong header [X-User-Id]: %s", err)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	b, err := getbalance(id)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Failed to get account balance for userID [%d]:%s", id, err)
 		return
 	}
-
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{"balance":%d}`, b)
 }
@@ -242,6 +238,7 @@ func newReq(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("X-Request-Id", rid)
 	w.Header().Add("X-User-Id", uid)
 	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "X-Request-Id: %s\n", rid)
 }
 
 func deposit(w http.ResponseWriter, r *http.Request) {
@@ -259,8 +256,8 @@ func deposit(w http.ResponseWriter, r *http.Request) {
 	}
 	uid, err := strconv.Atoi(headers.Get("X-User-Id"))
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Got wrong header [X-User-Id]: %s", err)
+		w.WriteHeader(http.StatusBadRequest)
+		log.Printf("Got wrong header [X-User-Id]: %s", err)
 		return
 	}
 	d := deltaModel{}
@@ -270,19 +267,19 @@ func deposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.Delta < 0 {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		log.Println("Failed to update balance: delta value is negative")
 		return
 	}
 	if err = updatebalance(uid, rid, d.Delta); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		log.Println("Failed to update balance:", err)
+		fmt.Fprintf(w, "Failed to update balance: %s", err)
 		return
 	}
+	w.Write([]byte("Balance changed successfully\n"))
 }
 
 func withdrawal(w http.ResponseWriter, r *http.Request) {
-
 	spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
 	span := tracer.StartSpan("got request for new withdrawal", ext.RPCServerOption(spanCtx))
 	defer span.Finish()
@@ -297,7 +294,7 @@ func withdrawal(w http.ResponseWriter, r *http.Request) {
 	}
 	uid, err := strconv.Atoi(headers.Get("X-User-Id"))
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintf(w, "Got wrong header [X-User-Id]: %s", err)
 		return
 	}
@@ -320,13 +317,13 @@ func withdrawal(w http.ResponseWriter, r *http.Request) {
 		Status:  false,
 	}
 	if wr.WithDrawSum < 0 {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		log.Printf("Got negative withdrawal sum")
 		sendCallback(spanCtx, wc)
 		return
 	}
 	if wr.WithDrawSum > b {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		log.Printf("There are insufficient funds in the account")
 		sendCallback(spanCtx, wc)
 		return

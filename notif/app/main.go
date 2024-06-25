@@ -37,11 +37,13 @@ type configModel struct {
 const (
 	createNotifTpl = `INSERT INTO notif (user_id, order_id, message) VALUES ($1, $2, $3) returning id`
 	getNotifsTpl   = `SELECT order_id, message FROM notif WHERE user_id=$1`
+	getNotifTpl    = `SELECT message FROM notif WHERE user_id=$1 AND order_id=$2`
 )
 
 var (
 	createNotifStmt *sql.Stmt
 	getNotifsStmt   *sql.Stmt
+	getNotifStmt    *sql.Stmt
 	tracer          opentracing.Tracer
 	closer          io.Closer
 )
@@ -131,6 +133,7 @@ func main() {
 
 	r.HandleFunc("/notif/create", isAuthenticatedMiddleware(create)).Methods("POST")
 	r.HandleFunc("/notif/get", isAuthenticatedMiddleware(get)).Methods("GET")
+	r.HandleFunc("/notif/get/{id}", isAuthenticatedMiddleware(get)).Methods("GET")
 
 	bindOn := fmt.Sprintf("%s:%s", cfg.host, cfg.port)
 	if err := http.ListenAndServe(bindOn, r); err != nil {
@@ -150,10 +153,14 @@ func mustPrepareStmts(ctx context.Context, db *sql.DB) {
 	if err != nil {
 		panic(err)
 	}
+
+	getNotifStmt, err = db.PrepareContext(ctx, getNotifTpl)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func createNotif(uid int, n *notifModel) error {
-	log.Println("... h43 ... : ", n.OrderID, n.Message)
 	_, err := createNotifStmt.Query(uid, n.OrderID, n.Message)
 	if err != nil {
 		log.Printf("Failed to create notification for user id [%d]: %s", uid, err)
@@ -162,7 +169,17 @@ func createNotif(uid int, n *notifModel) error {
 	return nil
 }
 
-func getNotif(uid int) ([]notifModel, error) {
+func getNotif(uid, oid int) (*notifModel, error) {
+	msg := new(string)
+	row := getNotifStmt.QueryRow(uid, oid)
+	if err := row.Err(); err != nil {
+		return nil, err
+	}
+	row.Scan(msg)
+	return &notifModel{OrderID: oid, Message: *msg}, nil
+}
+
+func getNotifs(uid int) ([]notifModel, error) {
 	rows, err := getNotifsStmt.Query(uid)
 	if err != nil {
 		return nil, err
@@ -218,14 +235,36 @@ func get(w http.ResponseWriter, r *http.Request) {
 	defer span.Finish()
 
 	headers := r.Header
-	id, err := strconv.Atoi(headers.Get("X-User-Id"))
+	uid, err := strconv.Atoi(headers.Get("X-User-Id"))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Printf("Got wrong header [X-User-Id]: %s", err)
 		return
 	}
-	notifs, _ := getNotif(id)
-	data, err := json.Marshal(notifs)
+
+	vars := mux.Vars(r)
+	if id_, ok := vars["id"]; ok {
+		var oid int
+		if oid, err = strconv.Atoi(id_); err != nil {
+			log.Println("Failed to parse request")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var n *notifModel
+		n, err = getNotif(uid, oid)
+		if err != nil {
+			log.Printf("Could not find event with order_id [%d]\n", oid)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		data, _ := json.MarshalIndent(n, "", "\t")
+		w.WriteHeader(http.StatusOK)
+		w.Write(data)
+		return
+	}
+
+	notifs, _ := getNotifs(uid)
+	data, err := json.MarshalIndent(notifs, "", "\t")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Printf("Failed to parse data: %s", err)

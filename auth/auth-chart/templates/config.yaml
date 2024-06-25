@@ -5,3 +5,20 @@ metadata:
 type: Opaque
 data:
   DATABASE_URI: {{ printf "postgresql+psycopg2://%s:%s@%s:%s/%s" .Values.postgresql.postgresqlUsername .Values.postgresql.postgresqlPassword (include "postgresql.fullname" .) .Values.postgresql.service.port .Values.postgresql.postgresqlDatabase  | b64enc | quote }}
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "auth-chart.fullname" . }}-configmap
+data:
+  DBHOST: {{ include "postgresql.fullname" . }}
+  DBUSER: {{ .Values.postgresql.postgresqlUsername}}
+  DBPASS: {{ .Values.postgresql.postgresqlPassword }}
+  DBNAME: {{ .Values.postgresql.postgresqlDatabase }}
+  JAEGER_SERVICE_NAME: {{ include "auth-chart.fullname" . }}
+  JAEGER_AGENT_HOST: {{ .Values.jaeger.agentHost }}
+  JAEGER_REPORTER_LOG_SPANS: {{ .Values.jaeger.reporterLogSpans | quote }}
+  JAEGER_SAMPLER_TYPE: {{ .Values.jaeger.samplerType }}
+  JAEGER_SAMPLER_PARAM: {{ .Values.jaeger.samplerParam | quote }}
+

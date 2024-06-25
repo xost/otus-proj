@@ -1,11 +1,13 @@
 package main
 
 import (
+	"app/tracing"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +17,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
 )
 
 type userModel struct {
@@ -40,6 +44,11 @@ type configModel struct {
 	host   string
 	port   string
 }
+
+var (
+	tracer opentracing.Tracer
+	closer io.Closer
+)
 
 const (
 	createUserTpl = `INSERT INTO auth_user (login, password, email, first_name, last_name) VALUES ($1, $2, $3, $4, $5) returning id`
@@ -111,6 +120,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	tracer, closer = tracing.Init()
+	defer closer.Close()
+
 	cfg := readConf()
 
 	db, err := makeDBConn(cfg)
@@ -164,6 +176,10 @@ func mustPrepareStmts(ctx context.Context, db *sql.DB) {
 }
 
 func register(w http.ResponseWriter, r *http.Request) {
+	spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
+	span := tracer.StartSpan("got request for new user register", ext.RPCServerOption(spanCtx))
+	defer span.Finish()
+
 	u := &userModel{}
 	var err error
 	if err = json.NewDecoder(r.Body).Decode(u); err != nil {
@@ -184,13 +200,21 @@ func register(w http.ResponseWriter, r *http.Request) {
 	log.Printf("User with email=%s was created", (*u).Email)
 }
 
-func signin(w http.ResponseWriter, _ *http.Request) {
+func signin(w http.ResponseWriter, r *http.Request) {
+	spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
+	span := tracer.StartSpan("got request for signin", ext.RPCServerOption(spanCtx))
+	defer span.Finish()
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"message": "Please go to login and provide Login/Password"}`))
 	log.Println(`Please go to login and provide Login/Password"}`)
 }
 
-func sessions(w http.ResponseWriter, _ *http.Request) {
+func sessions(w http.ResponseWriter, r *http.Request) {
+	// spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
+	// span := tracer.StartSpan("got request for current balance", ext.RPCServerOption(spanCtx))
+	// defer span.Finish()
+
 	var data []byte
 	var err error
 	if data, err = json.Marshal(SESSIONS); err != nil {
@@ -202,6 +226,10 @@ func sessions(w http.ResponseWriter, _ *http.Request) {
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
+	spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
+	span := tracer.StartSpan("got request for login", ext.RPCServerOption(spanCtx))
+	defer span.Finish()
+
 	l := &loginModel{}
 	var err error
 	if err = json.NewDecoder(r.Body).Decode(l); err != nil {
@@ -228,6 +256,10 @@ func login(w http.ResponseWriter, r *http.Request) {
 }
 
 func auth(w http.ResponseWriter, r *http.Request) {
+	spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
+	span := tracer.StartSpan("got request for auth", ext.RPCServerOption(spanCtx))
+	defer span.Finish()
+
 	if sessionID, err := r.Cookie("session_id"); err == nil {
 		log.Println("sessionID:", sessionID)
 		if userInfo, ok := SESSIONS[sessionID.Value]; ok {
@@ -238,7 +270,7 @@ func auth(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-First-Name", userInfo.FirstName)
 			w.Header().Set("X-Last-Name", userInfo.LastName)
 			w.WriteHeader(http.StatusOK)
-			data, _ := json.Marshal(userInfo)
+			data, _ := json.MarshalIndent(userInfo, "", "\t")
 			w.Write(data)
 			return
 		}
@@ -247,6 +279,10 @@ func auth(w http.ResponseWriter, r *http.Request) {
 }
 
 func logout(w http.ResponseWriter, r *http.Request) {
+	spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
+	span := tracer.StartSpan("got request for logout", ext.RPCServerOption(spanCtx))
+	defer span.Finish()
+
 	if sessionID, err := r.Cookie("session_id"); err == nil {
 		delete(SESSIONS, sessionID.Value)
 	}
@@ -259,7 +295,11 @@ func logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &cookie)
 }
 
-func health(w http.ResponseWriter, _ *http.Request) {
+func health(w http.ResponseWriter, r *http.Request) {
+	spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
+	span := tracer.StartSpan("got request for current balance", ext.RPCServerOption(spanCtx))
+	defer span.Finish()
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status": "OK"}`))
 }
