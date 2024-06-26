@@ -133,6 +133,7 @@ $curl --cookie <(echo "$cookie") -X GET http://arch.homework/orders/get/14
 ```mermaid
 %% регистрация на мероприятие
     sequenceDiagram
+        actor User
         User ->> Order service: register request
         alt good case
         Order service ->> Event service: occupy slot
