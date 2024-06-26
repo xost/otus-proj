@@ -137,26 +137,26 @@ $curl --cookie <(echo "$cookie") -X GET http://arch.homework/orders/get/14
         alt good case
         Order service ->> Event service: occupy slot
         Event service ->> Order service: successfully occupied
-        Order service ->> Notife service: notification. slot occupied successfully
+        Order service ->> Notif service: notification. slot occupied successfully
         Order service ->> Account service: pay for event
         Account service ->> Order service: successfully paid
-        Order service ->> Notife service: notification. event successfully paid
+        Order service ->> Notif service: notification. event successfully paid
         Order service ->> Order service: modify order status to complete
-        Order service ->> Notife service: notification. user registration completed
+        Order service ->> Notif service: notification. user registration completed
         end
         alt occupy failed
         Order service ->> Event service: occupy slot
         Event service ->> Order service: failed occupy
-        Order service ->> Notife service: notification. slot occupation fail. registration canceled
+        Order service ->> Notif service: notification. slot occupation fail. registration canceled
         Order service ->> Order service: modify order status to canceled
         end
         alt payment failed
         Order service ->> Event service: occupy slot
         Event service ->> Order service: successfully occupied
-        Order service ->> Notife service: notification. slot occupied successfully
+        Order service ->> Notif service: notification. slot occupied successfully
         Order service ->> Account service: pay for event
         Account service ->> Order service: payment failed
-        Order service ->> Notife service: notification. payment was failed. registration canceled
+        Order service ->> Notif service: notification. payment was failed. registration canceled
         Order service ->> Event service: cancel occupy slot
         Order service ->> Order service: modify order status to cancel
         end
