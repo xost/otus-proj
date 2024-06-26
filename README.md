@@ -135,28 +135,37 @@ $curl --cookie <(echo "$cookie") -X GET http://arch.homework/orders/get/14
     sequenceDiagram
         User ->> Order service: register request
         alt good case
+        User ->> Order Service: request for registration
         Order service ->> Event service: occupy slot
         Event service ->> Order service: successfully occupied
         Order service ->> Notif service: notification. slot occupied successfully
+        Notif service ->> User: notification
         Order service ->> Account service: pay for event
         Account service ->> Order service: successfully paid
         Order service ->> Notif service: notification. event successfully paid
+        Notif service ->> User: notification
         Order service ->> Order service: modify order status to complete
         Order service ->> Notif service: notification. user registration completed
+        Notif service ->> User: notification
         end
         alt occupy failed
+        User ->> Order Service: request for registration
         Order service ->> Event service: occupy slot
         Event service ->> Order service: failed occupy
         Order service ->> Notif service: notification. slot occupation fail. registration canceled
+        Notif service ->> User: notification
         Order service ->> Order service: modify order status to canceled
         end
         alt payment failed
+        User ->> Order Service: request for registration
         Order service ->> Event service: occupy slot
         Event service ->> Order service: successfully occupied
         Order service ->> Notif service: notification. slot occupied successfully
+        Notif service ->> User: notification
         Order service ->> Account service: pay for event
         Account service ->> Order service: payment failed
         Order service ->> Notif service: notification. payment was failed. registration canceled
+        Notif service ->> User: notification
         Order service ->> Event service: cancel occupy slot
         Order service ->> Order service: modify order status to cancel
         end
