@@ -134,6 +134,10 @@ $curl --cookie <(echo "$cookie") -X GET http://arch.homework/orders/get/14
 %% регистрация на мероприятие
     sequenceDiagram
         actor User
+        participant Order service
+        participant Event service
+        participant Account service
+        participant Notif service
         autonumber
         User ->> Order service: register request
         alt good case
