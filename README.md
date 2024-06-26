@@ -135,7 +135,6 @@ $curl --cookie <(echo "$cookie") -X GET http://arch.homework/orders/get/14
     sequenceDiagram
         User ->> Order service: register request
         alt good case
-        User ->> Order Service: request for registration
         Order service ->> Event service: occupy slot
         Event service ->> Order service: successfully occupied
         Order service ->> Notif service: notification. slot occupied successfully
@@ -149,7 +148,6 @@ $curl --cookie <(echo "$cookie") -X GET http://arch.homework/orders/get/14
         Notif service ->> User: notification
         end
         alt occupy failed
-        User ->> Order Service: request for registration
         Order service ->> Event service: occupy slot
         Event service ->> Order service: failed occupy
         Order service ->> Notif service: notification. slot occupation fail. registration canceled
@@ -157,7 +155,6 @@ $curl --cookie <(echo "$cookie") -X GET http://arch.homework/orders/get/14
         Order service ->> Order service: modify order status to canceled
         end
         alt payment failed
-        User ->> Order Service: request for registration
         Order service ->> Event service: occupy slot
         Event service ->> Order service: successfully occupied
         Order service ->> Notif service: notification. slot occupied successfully
